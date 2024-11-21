@@ -1,45 +1,66 @@
-# server.py
-
 import socket
 import threading
+import time
 
-from rate_limiter import RateLimiter
+# Rate limiting parameters
+LIMIT = 5
+WINDOW_SIZE = 10
 
-class RateLimitingServer:
-    def __init__(self, host='0.0.0.0', port=9999, limit='5 per 10 seconds'):
-        self.host = host
-        self.port = port
-        # Initialize the RateLimiter with the specified limit
-        self.rate_limiter = RateLimiter(limit)
+request_counts = {}
+window_start_times = {}
+lock = threading.Lock()
 
-    def handle_client(self, client_socket, client_address):
-        client_ip = client_address[0]
+def handle_client_message(data, client_address, server_socket):
+    client_ip = client_address[0]
+    now = time.time()
 
-        if self.rate_limiter.is_allowed(client_ip):
-            # Process the request
-            client_socket.send(b"Request processed.\n")
+    with lock:
+        # Get or initialize the window start time for this client
+        window_start = window_start_times.get(client_ip, now)
+        if now - window_start >= WINDOW_SIZE:
+            # Reset the window start time and request count
+            window_start_times[client_ip] = now
+            request_counts[client_ip] = 1
+            allowed = True
         else:
-            # Deny the request
-            client_socket.send(b"Rate limit exceeded. Try again later.\n")
+            # Within the current window
+            request_count = request_counts.get(client_ip, 0)
+            if request_count < LIMIT:
+                request_counts[client_ip] = request_count + 1
+                allowed = True
+            else:
+                allowed = False
 
-        client_socket.close()
+    if allowed:
+        response = b"Request processed.\n"
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Allowed request from {client_ip}")
+    else:
+        response = b"Rate limit exceeded. Try again later.\n"
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Denied request from {client_ip}")
 
-    def start(self):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind((self.host, self.port))
-        server.listen(5)
+    # Send response back to client
+    server_socket.sendto(response, client_address)
 
-        print(f"Fixed Window Rate Limiting Server listening on {self.host}:{self.port}")
+def main():
+    server_ip = '0.0.0.0'
+    server_port = 9999
 
-        try:
-            while True:
-                client_sock, client_address = server.accept()
-                client_thread = threading.Thread(
-                    target=self.handle_client,
-                    args=(client_sock, client_address)
-                )
-                client_thread.start()
-        except KeyboardInterrupt:
-            print("\nServer shutting down.")
-        finally:
-            server.close()
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.bind((server_ip, server_port))
+
+    print(f"UDP Rate Limiting Server listening on {server_ip}:{server_port}")
+
+    try:
+        while True:
+            data, client_address = server_socket.recvfrom(4096)
+            threading.Thread(
+                target=handle_client_message,
+                args=(data, client_address, server_socket)
+            ).start()
+    except KeyboardInterrupt:
+        print("\nServer shutting down.")
+    finally:
+        server_socket.close()
+
+if __name__ == '__main__':
+    main()
