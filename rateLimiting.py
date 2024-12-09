@@ -1,3 +1,4 @@
+'''
 class FixedWindow:
     def __init__(self, window, requestAllowed):
         #define the size of our accepting window
@@ -13,3 +14,4 @@ class FixedWindow:
             #allow through
         #else 
             #deny the request
+            '''
