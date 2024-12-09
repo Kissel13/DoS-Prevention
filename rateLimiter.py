@@ -10,7 +10,7 @@ class RateLimiter:
         self.limit = limit
         self.window = window
         self.request_log = {}  # Dictionary to track requests per IP
-        self.blacklist = set()  # Set to track permanently blacklisted IPs
+        self.blacklist = {}  # Set to track permanently blacklisted IPs
 
     def is_allowed(self, user_identifier):
         """
@@ -47,13 +47,13 @@ class RateLimiter:
             return False
 
         # Enforce rate limit
-        remaining_requests = self.limit - len(self.request_log[user_identifier])
-        if remaining_requests > 0:
-            print("User " + user_identifier + " is " + str(remaining_requests) + " requests away from being blacklisted.")
-        else:
+        if len(self.request_log[user_identifier]) >= self.limit:
             print("User " + user_identifier + " exceeded the rate limit. Permanently blacklisting.")
-            self.blacklist.add(user_identifier)  # Permanently blacklist the user
+            self.blacklist[user_identifier] = current_time  # Add the IP to the blacklist with a timestamp
             return False
+
+        remaining_requests = self.limit - len(self.request_log[user_identifier])
+        print("User " + user_identifier + " is " + str(remaining_requests) + " requests away from being blacklisted.")
 
         # Log the request
         self.request_log[user_identifier].append(current_time)
