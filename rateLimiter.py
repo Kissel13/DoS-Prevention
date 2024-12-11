@@ -40,11 +40,6 @@ class RateLimiter:
 
         # Debugging: Print the request log for the user
         print("Request log for " + user_identifier + ": " + str(self.request_log[user_identifier]))
-	
-        if len(self.request_log[user_identifier]) >= self.limit:
-            print("Rate limit exceeded. Adding " + user_identifier + " to the blacklist.")
-            self.blacklist[user_identifier] = current_time + 300  # Blacklist for 300 seconds
-            return False
 
         # Enforce rate limit
         if len(self.request_log[user_identifier]) >= self.limit:
